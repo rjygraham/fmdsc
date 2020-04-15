@@ -41,7 +41,7 @@ Copyright (C) 2020 fmdsc
 For example, to create metadata files for all files (recursively) beneath `C:\example` you would execute the following command:
 
 ````
-C:>fmdsc create -p 'C:\example'
+C:>fmdsc create -p "C:\example"
 ````
 
 ### Restore
@@ -68,13 +68,13 @@ Required option 'p, path' is missing.
 For example, to restore the file attributes for all files (recursively) beneath `C:\example` you would execute the following command:
 
 ````
-C:>fmdsc restore -p 'C:\example'
+C:>fmdsc restore -p "C:\example"
 ````
 
 And if you wanted to delete the source metadata files, you would exeucte the following command:
 
 ````
-C:>fmdsc restore -d -p 'C:\example'
+C:>fmdsc restore -d -p "C:\example"
 ````
 
 ### Logging
@@ -82,6 +82,6 @@ C:>fmdsc restore -d -p 'C:\example'
 fmdsc only logs to console output. If you need to record progress in a log file, pipe output to your file of choice. For example:
 
 ````
-C:>fmdsc create -p 'C:\example' > 'C:\logs\fmdsc-create.log'
-C:>fmdsc restore -p 'C:\example' > 'C:\logs\fmdsc-restore.log'
+C:>fmdsc create -p "C:\example" > "C:\logs\fmdsc-create.log"
+C:>fmdsc restore -p "C:\example" > "C:\logs\fmdsc-restore.log"
 ````

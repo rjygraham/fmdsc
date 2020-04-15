@@ -106,7 +106,7 @@ namespace Rgom.FileMetadata.Sidecar
 
 			files = new HashSet<string>(Directory.GetFiles(options.Path, "*.meta", SearchOption.AllDirectories));
 
-			Parallel.ForEach(files, file  =>
+			Parallel.ForEach(files, file =>
 			{
 				try
 				{
