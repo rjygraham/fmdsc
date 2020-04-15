@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Rgom.FileMetadata.Sidecar": {
+      "commandName": "Project",
+      "commandLineArgs": "restore -d -p \"C:\\Users\\rygraham\\Downloads\\Microsoft_Cloud_AI_Azure_Service_Icon_Set_2019_09_11\""
+    }
+  }
+}
