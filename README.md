@@ -4,6 +4,11 @@ The File Metadata Sidecar is useful in situations where file attributes need to 
 
 File Metadata Sidecar works by scanning the supplied path for all content files and creating a .meta file alongside the content file. Once the content files have reached their destination or on a storage system that supports file attributes, run fmdsc again to restore the file attributes from the .meta file and optionally delete the .meta file.
 
+---
+Development: ![.NET Core](https://github.com/rjygraham/fmdsc/workflows/.NET%20Core/badge.svg)
+
+---
+
 ## Usage
 
 To use fmdsc, you need to specify either the `create` or `restore` verbs depending on which operation you're trying to run.
@@ -85,3 +90,15 @@ fmdsc only logs to console output. If you need to record progress in a log file,
 C:>fmdsc create -p "C:\example" > "C:\logs\fmdsc-create.log"
 C:>fmdsc restore -p "C:\example" > "C:\logs\fmdsc-restore.log"
 ````
+
+---
+
+## License
+
+Copyright 2020 Ryan Graham
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
