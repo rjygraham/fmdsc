@@ -18,9 +18,9 @@ jobs:
       with:
         dotnet-version: 3.1.101
     - name: Install dependencies
-      run: dotnet restore
+      run: dotnet restore ./src/Rgom.FileMetadata.Sidecar/Rgom.FileMetadata.Sidecar.csproj
     - name: Build
-      run: dotnet build --configuration Release --no-restore
+      run: dotnet build ./src/Rgom.FileMetadata.Sidecar/Rgom.FileMetadata.Sidecar.csproj -c Release --no-restore
     - name: Publish
       run: dotnet publish ./src/Rgom.FileMetadata.Sidecar/Rgom.FileMetadata.Sidecar.csproj -c Release -p:PublishTrimmed=true -r win-x64 -o ./publish
     - name: Automatic Releases
