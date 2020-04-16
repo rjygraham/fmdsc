@@ -61,6 +61,9 @@ namespace Rgom.FileMetadata.Sidecar
 
 			Console.WriteLine($"Recursivle processing all files in: {options.Path}");
 
+			var startTime = DateTime.Now;
+			Console.WriteLine($"Start: {startTime}");
+
 			files = new HashSet<string>(Directory.GetFiles(options.Path, "*", SearchOption.AllDirectories));
 
 			Parallel.ForEach(files, file =>
@@ -91,6 +94,9 @@ namespace Rgom.FileMetadata.Sidecar
 			});
 
 			Console.WriteLine($"{currentCounter} / {files.Count} complete!");
+			var endTime = DateTime.Now;
+			Console.WriteLine($"End: {endTime}");
+			Console.WriteLine($"Duration: {endTime - startTime}");
 
 			return 0;
 		}
