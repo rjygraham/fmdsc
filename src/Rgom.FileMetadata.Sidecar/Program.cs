@@ -59,7 +59,7 @@ namespace Rgom.FileMetadata.Sidecar
 				return -1;
 			}
 
-			Console.WriteLine($"Recursivle processing all files in: {options.Path}");
+			Console.WriteLine($"Recursively processing all files in: {options.Path}");
 
 			var startTime = DateTime.Now;
 			Console.WriteLine($"Start: {startTime}");
