@@ -3,7 +3,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -155,15 +154,25 @@ namespace Rgom.FileMetadata.Sidecar
 
 		private static void DiscoverFiles(string searchPattern, string path)
 		{
+			DiscoverFilesRecursive(searchPattern, path);
+			isFileDiscoveryComplete = true;
+		}
+
+		private static void DiscoverFilesRecursive(string searchPattern, string path)
+		{
 			var directoryInfo = new DirectoryInfo(path);
 
-			foreach (var fileInfo in directoryInfo.EnumerateFiles(searchPattern, SearchOption.AllDirectories))
+			// Priorize discovering files over breadth directory discovery.
+			foreach (var fileInfo in directoryInfo.EnumerateFiles(searchPattern, SearchOption.TopDirectoryOnly))
 			{
 				discoveredFiles.Enqueue(fileInfo);
 				totalFileCount++;
 			}
 
-			isFileDiscoveryComplete = true;
+			foreach (var childDirectoryInfo in directoryInfo.EnumerateDirectories())
+			{
+				DiscoverFilesRecursive(searchPattern, childDirectoryInfo.FullName);
+			}
 		}
 
 		private static List<Task> GetProcessTasks(int quantity, Action task)
