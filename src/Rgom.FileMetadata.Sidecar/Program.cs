@@ -1,7 +1,9 @@
 ﻿using CommandLine;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
@@ -11,22 +13,33 @@ namespace Rgom.FileMetadata.Sidecar
 {
 	class Program
 	{
-		private static HashSet<string> files;
-		private static int currentCounter = 0;
+		private static BaseOptions commandLineOptions;
 
-		[Verb("create", HelpText = "Create file attributes metadata files.")]
-		class ExtractOptions
+		private static ConcurrentQueue<FileInfo> discoveredFiles = new ConcurrentQueue<FileInfo>();
+		private static bool isFileDiscoveryComplete = false;
+
+		private static long totalFileCount = 0;
+		private static long processedfileCount = 0;
+		private static long errorCount = 0;
+		private static DateTime startTime;
+
+		class BaseOptions
 		{
 			[Option('p', "path", Required = true, HelpText = "Set the input folder to scan.")]
 			public string Path { get; set; }
+
+			[Option('t', "threads", HelpText = "Number of threads to use for processing.", Default = 8)]
+			public int ThreadCount { get; set; }
+		}
+
+		[Verb("create", HelpText = "Create file attributes metadata files.")]
+		class CreateOptions : BaseOptions
+		{
 		}
 
 		[Verb("restore", HelpText = "Restore file attributes.")]
-		class RestoreOptions
+		class RestoreOptions : BaseOptions
 		{
-			[Option('p', "path", Required = true, HelpText = "Set the input folder to scan.")]
-			public string Path { get; set; }
-
 			[Option('d', "delete", Required = false, HelpText = "Delete the source metadata file.")]
 			public bool Delete { get; set; }
 		}
@@ -43,113 +56,185 @@ namespace Rgom.FileMetadata.Sidecar
 
 		static int Main(string[] args)
 		{
-			var result = Parser.Default.ParseArguments<ExtractOptions, RestoreOptions>(args)
-			.MapResult(
-			  (ExtractOptions opts) => RunExtractAndReturnExitCode(opts),
-			  (RestoreOptions opts) => RunRestoreAndReturnExitCode(opts),
-			  errs => 1);
+			commandLineOptions = Parser.Default.ParseArguments<CreateOptions, RestoreOptions>(args)
+				.MapResult(
+					(CreateOptions options) => GetOptions(options),
+					(RestoreOptions options) => GetOptions(options),
+					errs => new BaseOptions()
+				);
+
+			if (!Directory.Exists(commandLineOptions.Path))
+			{
+				Console.WriteLine("Path does not exist.");
+				return 1;
+			}
+
+			List<Task> tasks;
+
+			switch (commandLineOptions)
+			{
+				case CreateOptions c:
+					tasks = new List<Task>
+					{
+							Task.Factory.StartNew(() => DiscoverFiles("*", commandLineOptions.Path)),
+							Task.Factory.StartNew(() => DisplayOutput())
+					};
+
+					tasks.AddRange(GetProcessTasks(commandLineOptions.ThreadCount, ProcessCreateFiles));
+
+					break;
+				case RestoreOptions r:
+					tasks = new List<Task>
+					{
+							Task.Factory.StartNew(() => DiscoverFiles("*.meta", commandLineOptions.Path)),
+							Task.Factory.StartNew(() => DisplayOutput())
+					};
+
+					tasks.AddRange(GetProcessTasks(commandLineOptions.ThreadCount, ProcessRestoreFiles));
+
+					break;
+				default:
+					return 1;
+			}
+
+			try
+			{
+				startTime = DateTime.Now;
+				Console.WriteLine($"Starting: {startTime}");
+
+				Task.WaitAll(tasks.ToArray());
+
+				Console.WriteLine($"Done: {DateTime.Now}");
+				
+				return 0;
+			}
+			catch (Exception ex)
+			{
+				// Log exception.
+			}
+
+			return 1;
+		}
+
+		private static BaseOptions GetOptions(BaseOptions options)
+		{
+			return options;
+		}
+
+		private static void DisplayOutput()
+		{
+			var delay = TimeSpan.FromSeconds(1);
+
+			string line = "";
+			string backup = "";
+
+			do
+			{
+				if (totalFileCount > 0)
+				{
+					backup = new string('\b', line.Length);
+					Console.Write(backup);
+					line = $"total: {totalFileCount}  processed: {processedfileCount}  error: {errorCount}  remaining: {totalFileCount - (errorCount + processedfileCount)}  percent: {Math.Round((decimal)(processedfileCount + errorCount) / totalFileCount * 100, 2):00.00}%  elapsed: {DateTime.Now - startTime:hh\\:mm\\:ss} ";
+					Console.Write(line);
+				}
+
+				Thread.Sleep(delay);
+
+			} while (!isFileDiscoveryComplete || discoveredFiles.Count > 0);
+
+			if (totalFileCount > 0)
+			{
+				backup = new string('\b', line.Length);
+				Console.Write(backup);
+				line = $"total: {totalFileCount}  processed: {processedfileCount}  error: {errorCount}  remaining: {totalFileCount - (errorCount + processedfileCount)}  percent: {Math.Round((decimal)(processedfileCount + errorCount) / totalFileCount * 100, 2):00.00}%  elapsed: {DateTime.Now - startTime:hh\\:mm\\:ss} ";
+				Console.Write(line);
+			}
+
+			Console.WriteLine();
+		}
+
+		private static void DiscoverFiles(string searchPattern, string path)
+		{
+			var directoryInfo = new DirectoryInfo(path);
+
+			foreach (var fileInfo in directoryInfo.EnumerateFiles(searchPattern, SearchOption.AllDirectories))
+			{
+				discoveredFiles.Enqueue(fileInfo);
+				totalFileCount++;
+			}
+
+			isFileDiscoveryComplete = true;
+		}
+
+		private static List<Task> GetProcessTasks(int quantity, Action task)
+		{
+			var result = new List<Task>();
+
+			for (int i = 0; i < quantity; i++)
+			{
+				result.Add(Task.Factory.StartNew(task));
+			}
 
 			return result;
 		}
 
-		private static int RunExtractAndReturnExitCode(ExtractOptions options)
+		private static void ProcessCreateFiles()
 		{
-			if (!ValidateInputPath(options.Path))
+			while (!isFileDiscoveryComplete || discoveredFiles.Count > 0)
 			{
-				return -1;
-			}
-
-			Console.WriteLine($"Recursively processing all files in: {options.Path}");
-
-			var startTime = DateTime.Now;
-			Console.WriteLine($"Start: {startTime}");
-
-			files = new HashSet<string>(Directory.GetFiles(options.Path, "*", SearchOption.AllDirectories));
-
-			Parallel.ForEach(files, file =>
-			{
-				try
+				if (discoveredFiles.TryDequeue(out var fileInfo))
 				{
-					var fileInfo = new FileInfo(file);
-
-					Console.WriteLine($"Processing: {fileInfo.FullName}");
-
-					var metadata = new Metadata
+					try
 					{
-						CreationTimeUtc = fileInfo.CreationTimeUtc,
-						LastWriteTimeUtc = fileInfo.LastWriteTimeUtc,
-						LastAccessTimeUtc = fileInfo.LastAccessTimeUtc
-					};
+						var metadata = new Metadata
+						{
+							CreationTimeUtc = fileInfo.CreationTimeUtc,
+							LastWriteTimeUtc = fileInfo.LastWriteTimeUtc,
+							LastAccessTimeUtc = fileInfo.LastAccessTimeUtc
+						};
 
-					File.WriteAllText($"{fileInfo.FullName}.meta", JsonSerializer.Serialize(metadata));
+						File.WriteAllText($"{fileInfo.FullName}.meta", JsonSerializer.Serialize(metadata));
 
-					Interlocked.Increment(ref currentCounter);
-				}
-				catch (Exception ex)
-				{
-					Console.WriteLine();
-					Console.WriteLine($"ERROR: {file}, MESSAGE: {ex.Message}");
-					Console.WriteLine();
-				}
-			});
-
-			Console.WriteLine($"{currentCounter} / {files.Count} complete!");
-			var endTime = DateTime.Now;
-			Console.WriteLine($"End: {endTime}");
-			Console.WriteLine($"Duration: {endTime - startTime}");
-
-			return 0;
-		}
-
-		private static int RunRestoreAndReturnExitCode(RestoreOptions options)
-		{
-			if (!ValidateInputPath(options.Path))
-			{
-				return -1;
-			}
-
-			Console.WriteLine($"Recursivle processing all files in: {options.Path}");
-
-			files = new HashSet<string>(Directory.GetFiles(options.Path, "*.meta", SearchOption.AllDirectories));
-
-			Parallel.ForEach(files, file =>
-			{
-				try
-				{
-					var fileInfo = new FileInfo(file);
-
-					Console.WriteLine($"Processing: {fileInfo.FullName}");
-
-					var metadata = JsonSerializer.Deserialize<Metadata>(File.ReadAllText(fileInfo.FullName));
-					var targetFileName = fileInfo.FullName.Remove(fileInfo.FullName.Length - 5);
-
-					File.SetCreationTimeUtc(targetFileName, metadata.CreationTimeUtc);
-					File.SetLastWriteTimeUtc(targetFileName, metadata.LastWriteTimeUtc);
-					File.SetLastAccessTimeUtc(targetFileName, metadata.LastAccessTimeUtc);
-
-					if (options.Delete)
-					{
-						File.Delete(fileInfo.FullName);
+						Interlocked.Increment(ref processedfileCount);
 					}
-
-					Interlocked.Increment(ref currentCounter);
+					catch (Exception ex)
+					{
+						Interlocked.Increment(ref errorCount);
+					}
 				}
-				catch (Exception ex)
-				{
-					Console.WriteLine();
-					Console.WriteLine($"ERROR: {file}, MESSAGE: {ex.Message}");
-					Console.WriteLine();
-				}
-			});
-
-			Console.WriteLine($"{currentCounter} / {files.Count} complete!");
-
-			return 0;
+			}
 		}
 
-		private static bool ValidateInputPath(string path)
+		private static void ProcessRestoreFiles()
 		{
-			return Directory.Exists(path);
+			var scopedOptions = (RestoreOptions)commandLineOptions;
+
+			while (!isFileDiscoveryComplete || discoveredFiles.Count > 0)
+			{
+				if (discoveredFiles.TryDequeue(out var fileInfo))
+				{
+					try
+					{
+						var metadata = JsonSerializer.Deserialize<Metadata>(File.ReadAllText(fileInfo.FullName));
+						var targetFileName = fileInfo.FullName.Remove(fileInfo.FullName.Length - 5);
+
+						File.SetCreationTimeUtc(targetFileName, metadata.CreationTimeUtc);
+						File.SetLastWriteTimeUtc(targetFileName, metadata.LastWriteTimeUtc);
+						File.SetLastAccessTimeUtc(targetFileName, metadata.LastAccessTimeUtc);
+
+						if (scopedOptions.Delete)
+						{
+							File.Delete(fileInfo.FullName);
+						}
+
+						Interlocked.Increment(ref processedfileCount);
+					}
+					catch (Exception ex)
+					{
+						Interlocked.Increment(ref errorCount);
+					}
+				}
+			}
 		}
 	}
 }
